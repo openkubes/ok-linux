@@ -1,0 +1,75 @@
+#cloud-config
+# okl — OpenKubes Linux cloud-init user-data
+# Default configuration for okl nodes
+
+# ─── System ───────────────────────────────────────────────────────────────────
+hostname: okl-node
+manage_etc_hosts: true
+
+# ─── Packages ─────────────────────────────────────────────────────────────────
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - net-tools
+  - iputils-ping
+  - wireguard
+  - qemu-guest-agent
+  - open-iscsi
+  - nfs-common
+  - fail2ban
+  - unattended-upgrades
+
+# ─── Users ────────────────────────────────────────────────────────────────────
+users:
+  - name: okl
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo
+    shell: /bin/bash
+    lock_passwd: false
+    ssh_authorized_keys:
+      - # ADD YOUR SSH PUBLIC KEY HERE
+
+# ─── SSH Hardening ────────────────────────────────────────────────────────────
+ssh_pwauth: false
+
+# ─── sysctl ───────────────────────────────────────────────────────────────────
+write_files:
+  - path: /etc/sysctl.d/99-okl.conf
+    content: |
+      # okl kernel parameters
+      net.ipv4.ip_forward=1
+      net.ipv4.conf.all.rp_filter=0
+      net.bridge.bridge-nf-call-iptables=1
+      net.bridge.bridge-nf-call-ip6tables=1
+      fs.inotify.max_user_instances=8192
+      fs.inotify.max_user_watches=524288
+      vm.overcommit_memory=1
+      kernel.panic=10
+      kernel.panic_on_oops=1
+
+  - path: /etc/modules-load.d/okl.conf
+    content: |
+      # okl kernel modules
+      br_netfilter
+      overlay
+      vfio
+      vfio_pci
+
+# ─── Commands ─────────────────────────────────────────────────────────────────
+runcmd:
+  - sysctl -p /etc/sysctl.d/99-okl.conf
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - systemctl enable fail2ban
+  - echo "okl node ready" > /etc/okl-version
+
+# ─── Final Message ────────────────────────────────────────────────────────────
+final_message: |
+  🐧 okl — OpenKubes Linux is ready.
+  Version: $VERSION
+  Node: $HOSTNAME

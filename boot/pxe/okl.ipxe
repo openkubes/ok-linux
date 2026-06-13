@@ -1,0 +1,34 @@
+#!ipxe
+# okl — OpenKubes Linux iPXE Boot Script
+
+echo
+echo ============================================
+echo   okl -- OpenKubes Linux
+echo   The OS that knows it's running Kubernetes
+echo ============================================
+echo
+
+# Set boot server
+set boot-server http://boot.openkubes.io/okl
+
+# Set version
+set okl-version v0.1.0
+
+echo Booting okl ${okl-version}...
+echo
+
+# Download kernel and initrd
+kernel ${boot-server}/${okl-version}/vmlinuz \
+  initrd=initrd.img \
+  root=/dev/sda1 \
+  console=tty0 \
+  console=ttyS0,115200n8 \
+  net.ifnames=0 \
+  biosdevname=0 \
+  okl.version=${okl-version} \
+  okl.node=${hostname}
+
+initrd ${boot-server}/${okl-version}/initrd.img
+
+boot || echo Boot failed, dropping to shell...
+shell
