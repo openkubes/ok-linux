@@ -1,0 +1,38 @@
+# ok-linux Profile: baremetal
+# Target: Talos Linux on physical servers (Hetzner AX/EX series)
+# Used by: ok-cluster CAPK templates with bare-metal provider
+
+talos:
+  version: v1.9.5
+  schematic_id: ""  # TODO: generate via Talos Image Factory (OK-45)
+  image: ""         # TODO: set after schematic generation
+
+kernel_args:
+  - net.ifnames=0
+  - talos.platform=metal
+
+machine_config:
+  install:
+    disk: /dev/nvme0n1   # Hetzner AX/EX primary NVMe
+    wipe: false
+  network:
+    nameservers:
+      - 8.8.8.8
+      - 1.1.1.1
+  time:
+    servers:
+      - time.cloudflare.com
+
+extensions: []
+# Recommended extensions for bare metal:
+# - nvidia         (if GPU node, see ../../extensions/nvidia/)
+# - intel-gpu      (if Intel GPU node)
+# - iscsi-tools    (for iSCSI storage)
+
+notes: |
+  Hetzner bare metal provisioning requires:
+  - Rescue mode via Hetzner Robot API for initial install
+  - installImage or iPXE boot for Talos deployment
+  - AX42-U primary disk: /dev/nvme0n1
+  - GEX44 primary disk: /dev/nvme0n1
+  After provisioning, nodes join via WireGuard VPN (ok-vpn).

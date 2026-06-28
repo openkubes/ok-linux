@@ -1,0 +1,38 @@
+# ok-linux Profile: edge
+# Target: Single-node or lightweight edge deployments (IoT, ROS2, embedded)
+# Status: DRAFT — not yet production ready
+# Tracked by: OK-44
+
+talos:
+  version: v1.9.5
+  schematic_id: ""  # TODO: define edge-specific schematic
+  image: ""
+
+kernel_args:
+  - net.ifnames=0
+  - talos.platform=metal
+
+machine_config:
+  install:
+    disk: /dev/sda
+    wipe: false
+  network:
+    nameservers:
+      - 8.8.8.8
+
+extensions: []
+# Potential extensions for edge:
+# - ros2-runtime   (Robot Operating System 2)
+# - intel-gpu      (for edge inference)
+
+notes: |
+  Edge profile is a placeholder for future use cases:
+  - Single-node Kubernetes (no HA control plane)
+  - IoT gateways and robotics (ROS2)
+  - Low-power ARM/x86 devices
+  - Disconnected / air-gapped environments
+
+  Open questions:
+  - ARM64 support via Talos (already upstream)
+  - Minimal extension set for constrained hardware
+  - Offline image factory workflow

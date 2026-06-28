@@ -1,94 +1,92 @@
-# ok-linux 🐧
+# ok-linux
 
-> **OpenKubes Linux — The OS that knows it's running Kubernetes.**
+**ok-linux** is the Kubernetes Host OS layer of [OpenKubes](https://github.com/openkubes/openkubes).
 
-A minimal, KubeVirt-optimized Linux OS for OpenKubes infrastructure nodes.  
-Designed for one purpose: running OpenKubes reliably, securely and consistently across bare metal, edge and cloud.
+It defines *which operating system* runs on OpenKubes nodes — independent of *how* clusters are provisioned ([ok-cluster](https://github.com/openkubes/ok-cluster)).
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Jira](https://img.shields.io/badge/jira-OK--37-blue)](https://kubernauts.atlassian.net/browse/OK-37)
-
----
-
-## Vision
-
-Most Linux distributions are general-purpose. ok-linux is not.
-
-ok-linux is an infrastructure OS built specifically for OpenKubes nodes — with KubeVirt, GPU passthrough, Hetzner Bare Metal and edge environments as first-class targets.
-
-Inspired by [Talos Linux](https://www.talos.dev/), but OpenKubes-native:
-
-- **Hetzner-aware** — vSwitch, VLAN, installimage compatible
-- **KubeVirt-optimized** — kernel parameters, nested virt, IOMMU out of the box
-- **GPU-ready** — NVIDIA VFIO passthrough, SR-IOV support
-- **Minimal** — no unnecessary packages, minimal attack surface
-- **Makefile-driven** — consistent interface across all components
+> ok-linux is not a general-purpose Linux distribution.
+> It is a curated set of [Talos Linux](https://www.talos.dev/) profiles, image factory schematics, and extensions — optimized for running Kubernetes nodes on bare metal, KubeVirt, and edge environments.
 
 ---
 
-## Components
+## Architecture
 
-| Component | Description |
-|-----------|-------------|
-| **ok-kernel** | Custom kernel with KVM, VFIO, SR-IOV, DPDK, KubeVirt patches |
-| **ok-image** | Golden image pipeline for Bare Metal + Cloud |
-| **ok-boot** | PXE/iPXE boot for automated provisioning |
-| **ok-hardening** | Minimal attack surface, SSH hardening, sysctl tuning |
-
----
-
-## Target Platforms
-
-- Hetzner Bare Metal (AX42-U, GEX44)
-- Proxmox VMs
-- KubeVirt VMs
-- Edge devices
-
----
-
-## Makefile Interface
-
-```bash
-make kernel    # Build ok-linux kernel
-make image     # Build golden image
-make boot      # PXE boot provisioning
-make install   # Full node provisioning via ok-rke2 (RocketLab)
-make help      # Show all targets
+```
+ok-linux/
+├── profiles/          # Declarative OS profiles per target environment
+│   ├── kubevirt/      # Talos VMs under KubeVirt (QEMU/KVM)
+│   ├── baremetal/     # Physical servers (Hetzner AX/EX)
+│   └── edge/          # Single-node, IoT, ROS2 (draft)
+│
+├── image-factory/     # Talos Image Factory schematics (Phase 2)
+│   ├── kubevirt/
+│   └── baremetal/
+│
+└── extensions/        # Curated Talos extensions (Phase 3)
+    ├── nvidia/
+    └── qemu-guest-agent/
 ```
 
 ---
 
-## Relationship to ok-rke2
+## Profiles (Phase 1)
 
-ok-linux and [ok-rke2](https://github.com/openkubes/ok-rke2) are complementary:
+Each profile is a declarative YAML file describing:
 
-```
-ok-linux   →  The OS layer     (kernel, image, boot)
-ok-rke2    →  The cluster layer (RKE2 install, vSwitch, GPU labels)
-```
+| Field | Description |
+|---|---|
+| `talos.version` | Talos Linux version |
+| `talos.schematic_id` | Talos Image Factory schematic ID |
+| `talos.image` | Full image URL for provisioning |
+| `kernel_args` | Kernel arguments |
+| `machine_config` | MachineConfig defaults (disk, network, time) |
+| `extensions` | Active Talos extensions |
 
-Together they form the foundation of an OpenKubes INFRA node:
+### Available profiles
 
-```bash
-# 1. Boot node with ok-linux
-make boot node=ok-infra
-
-# 2. Deploy RKE2 cluster
-cd ../ok-rke2 && make install
-```
-
----
-
-## Status
-
-🚧 **Early Design Phase** — contributions and ideas welcome.
+| Profile | Target | Status |
+|---|---|---|
+| `kubevirt` | Talos VMs under KubeVirt | ✅ stable |
+| `baremetal` | Hetzner AX/EX bare metal | 🚧 in progress |
+| `edge` | IoT / single-node / ROS2 | 📋 draft |
 
 ---
 
-## Part of OpenKubes
+## Integration with ok-cluster
 
-ok-linux is part of the [OpenKubes](https://github.com/openkubes/openkubes) platform —  
-AI-Native Runtime Infrastructure for Sovereign Edge, Industrial Systems and Next-Generation Compute.
+[ok-cluster](https://github.com/openkubes/ok-cluster) references ok-linux profiles instead of raw Talos schematic IDs:
+
+```yaml
+# ok-cluster cluster config (Phase 2+)
+os:
+  distribution: ok-linux
+  profile: kubevirt
+  version: v1.0
+```
+
+ok-cluster resolves this to the concrete Talos schematic ID and image URL internally.
+
+---
+
+## Roadmap
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 — Profiles | Declarative OS profiles per environment | 🚧 active |
+| 2 — Image Factory | Reproducible Talos images via schematics | 📋 planned |
+| 3 — Extensions | Curated Talos extensions (nvidia, qemu-guest-agent, …) | 📋 planned |
+
+Tracked in Jira: [OK-37](https://kubernauts.atlassian.net/browse/OK-37)
+
+---
+
+## Related repositories
+
+| Repository | Description |
+|---|---|
+| [ok-cluster](https://github.com/openkubes/ok-cluster) | Cluster lifecycle engine (CAPI/CAPK) |
+| [ok-local](https://github.com/openkubes/ok-local) | Local development environment |
+| [openkubes](https://github.com/openkubes/openkubes) | Architecture, docs, vision |
 
 ---
 
