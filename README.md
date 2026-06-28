@@ -2,69 +2,64 @@
 
 **ok-linux** is the Kubernetes Host OS layer of [OpenKubes](https://github.com/openkubes/openkubes).
 
-It defines *which operating system* runs on OpenKubes nodes — independent of *how* clusters are provisioned ([ok-cluster](https://github.com/openkubes/ok-cluster)).
+It provides **Talos Linux profiles**, **Image Factory schematics**, and **MachineConfig presets** — optimized for running Kubernetes nodes on bare metal, KubeVirt, and edge environments.
 
 > ok-linux is not a general-purpose Linux distribution.
-> It is a curated set of [Talos Linux](https://www.talos.dev/) profiles, image factory schematics, and extensions — optimized for running Kubernetes nodes on bare metal, KubeVirt, and edge environments.
+> It is a curated OS abstraction on top of [Talos Linux](https://www.talos.dev/) —
+> so that [ok-cluster](https://github.com/openkubes/ok-cluster) only needs to say:
+>
+> ```yaml
+> os:
+>   distribution: ok-linux
+>   profile: kubevirt
+> ```
 
 ---
 
-## Architecture
+## Repository structure
 
 ```
 ok-linux/
 ├── profiles/          # Declarative OS profiles per target environment
-│   ├── kubevirt/      # Talos VMs under KubeVirt (QEMU/KVM)
-│   ├── baremetal/     # Physical servers (Hetzner AX/EX)
-│   └── edge/          # Single-node, IoT, ROS2 (draft)
+│   ├── kubevirt/      # Talos VMs under KubeVirt (QEMU/KVM)       ✅
+│   ├── baremetal/     # Physical servers (Hetzner AX/EX)           ✅
+│   ├── edge/          # Single-node, IoT, ROS2                     📋 draft
+│   └── gpu/           # GPU nodes (RTX 4000 Ada, first-class)      📋 planned
 │
-├── image-factory/     # Talos Image Factory schematics (Phase 2)
-│   ├── kubevirt/
-│   └── baremetal/
+├── extensions/        # Curated Talos extensions (Phase 3)
+│   ├── nvidia/
+│   └── qemu-guest-agent/
 │
-└── extensions/        # Curated Talos extensions (Phase 3)
-    ├── nvidia/
-    └── qemu-guest-agent/
+├── docs/
+│   ├── architecture.md
+│   └── roadmap.md
+│
+├── archive/           # Previous custom kernel/image approach (historical)
+└── Makefile
 ```
 
 ---
 
-## Profiles (Phase 1)
+## Profiles
 
-Each profile is a declarative YAML file describing:
-
-| Field | Description |
-|---|---|
-| `talos.version` | Talos Linux version |
-| `talos.schematic_id` | Talos Image Factory schematic ID |
-| `talos.image` | Full image URL for provisioning |
-| `kernel_args` | Kernel arguments |
-| `machine_config` | MachineConfig defaults (disk, network, time) |
-| `extensions` | Active Talos extensions |
-
-### Available profiles
+Each profile is a declarative YAML describing the complete OS configuration for a node type:
 
 | Profile | Target | Status |
 |---|---|---|
 | `kubevirt` | Talos VMs under KubeVirt | ✅ stable |
 | `baremetal` | Hetzner AX/EX bare metal | 🚧 in progress |
 | `edge` | IoT / single-node / ROS2 | 📋 draft |
+| `gpu` | GPU nodes (RTX 4000 Ada) | 📋 planned |
 
----
+Each profile contains (Phase 1 → Phase 2):
 
-## Integration with ok-cluster
-
-[ok-cluster](https://github.com/openkubes/ok-cluster) references ok-linux profiles instead of raw Talos schematic IDs:
-
-```yaml
-# ok-cluster cluster config (Phase 2+)
-os:
-  distribution: ok-linux
-  profile: kubevirt
-  version: v1.0
 ```
-
-ok-cluster resolves this to the concrete Talos schematic ID and image URL internally.
+profiles/kubevirt/
+├── profile.yaml        # Talos version, schematic ID, kernel args, extensions
+├── schematic.yaml      # Talos Image Factory input (Phase 2)
+├── machineconfig.yaml  # MachineConfig defaults for ok-cluster (Phase 2)
+└── README.md
+```
 
 ---
 
@@ -72,21 +67,22 @@ ok-cluster resolves this to the concrete Talos schematic ID and image URL intern
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 — Profiles | Declarative OS profiles per environment | 🚧 active |
-| 2 — Image Factory | Reproducible Talos images via schematics | 📋 planned |
-| 3 — Extensions | Curated Talos extensions (nvidia, qemu-guest-agent, …) | 📋 planned |
+| **1 — Profiles** | Declarative OS profiles per environment | ✅ done |
+| **2 — Image Factory** | Reproducible images, `make build/show PROFILE=` | 📋 planned |
+| **3 — Extensions** | Curated extensions with governance | 📋 planned |
 
-Tracked in Jira: [OK-37](https://kubernauts.atlassian.net/browse/OK-37)
+→ See [docs/roadmap.md](docs/roadmap.md) for details.
 
 ---
 
-## Related repositories
+## Role separation
 
-| Repository | Description |
+| Repository | Responsibility |
 |---|---|
-| [ok-cluster](https://github.com/openkubes/ok-cluster) | Cluster lifecycle engine (CAPI/CAPK) |
-| [ok-local](https://github.com/openkubes/ok-local) | Local development environment |
-| [openkubes](https://github.com/openkubes/openkubes) | Architecture, docs, vision |
+| **ok-linux** | OS profiles, schematics, MachineConfig, extensions |
+| **[ok-cluster](https://github.com/openkubes/ok-cluster)** | Cluster lifecycle — CAPI, CAPK, upgrade, scale |
+| **[ok-local](https://github.com/openkubes/ok-local)** | Local development environment |
+| **[openkubes](https://github.com/openkubes/openkubes)** | Architecture, docs, vision |
 
 ---
 
