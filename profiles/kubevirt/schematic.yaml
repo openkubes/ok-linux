@@ -13,13 +13,5 @@
 
 customization:
   systemExtensions:
-    officialExtensions: []
-
-# No extensions in the base kubevirt profile.
-# The base Talos image is sufficient for KubeVirt VMs.
-#
-# To add qemu-guest-agent (Phase 3):
-#   customization:
-#     systemExtensions:
-#       officialExtensions:
-#         - siderolabs/qemu-guest-agent
+    officialExtensions:
+      - siderolabs/qemu-guest-agent
