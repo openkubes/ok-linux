@@ -1,0 +1,26 @@
+# Talos Image Factory Schematic — ok-linux profile: baremetal
+#
+# Submit to factory.talos.dev to generate/verify the schematic ID:
+#   make build PROFILE=baremetal
+#
+# Current schematic ID: (pending — run make build PROFILE=baremetal)
+#
+# Talos Image Factory API:
+#   POST https://factory.talos.dev/schematics
+#   Content-Type: application/yaml
+#   Body: (this file, without comments)
+
+customization:
+  systemExtensions:
+    officialExtensions: []
+
+# Base baremetal profile — no extensions.
+#
+# For GPU nodes (ok-gpu, RTX 4000 Ada), use profiles/gpu/ instead.
+#
+# To add nvidia support (Phase 3):
+#   customization:
+#     systemExtensions:
+#       officialExtensions:
+#         - siderolabs/nvidia-container-toolkit
+#         - siderolabs/nvidia-open-gpu-kernel-modules

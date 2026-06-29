@@ -1,0 +1,25 @@
+# Talos Image Factory Schematic — ok-linux profile: kubevirt
+#
+# Submit to factory.talos.dev to generate/verify the schematic ID:
+#   make build PROFILE=kubevirt
+#
+# Current schematic ID:
+#   ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515
+#
+# Talos Image Factory API:
+#   POST https://factory.talos.dev/schematics
+#   Content-Type: application/yaml
+#   Body: (this file, without comments)
+
+customization:
+  systemExtensions:
+    officialExtensions: []
+
+# No extensions in the base kubevirt profile.
+# The base Talos image is sufficient for KubeVirt VMs.
+#
+# To add qemu-guest-agent (Phase 3):
+#   customization:
+#     systemExtensions:
+#       officialExtensions:
+#         - siderolabs/qemu-guest-agent
