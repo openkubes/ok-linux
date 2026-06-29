@@ -434,116 +434,22 @@ ok-linux follows [Semantic Versioning](https://semver.org/):
 
 ---
 
+---
+
 ## 10. Decision Log
 
-Decisions are recorded here permanently. They explain *why* the system is built the way it is.
+Significant architectural decisions are documented as Architecture Decision Records (ADRs) in [`docs/adr/`](adr/README.md).
 
----
-
-### DEC-001: Talos Linux as the base OS
-
-**Date:** 2026-06  
-**Decision:** ok-linux builds on Talos Linux rather than maintaining a custom kernel.  
-**Context:** The initial approach (archived in `archive/`) included a custom kernel config, PXE boot scripts, and a Cloud-Init image pipeline.  
-**Rationale:**
-- Talos is immutable, API-driven, and purpose-built for Kubernetes
-- The custom kernel approach required continuous maintenance
-- Talos Image Factory provides a reproducible, API-driven image pipeline
-- ok-linux adds value through curation and abstraction, not reimplementation
-
-**Consequence:** ok-linux is a Talos distribution, not a Linux distribution.
-
----
-
-### DEC-002: Profiles as the primary abstraction
-
-**Date:** 2026-06  
-**Decision:** The primary abstraction is a "profile" — a named, declarative OS configuration for a target environment.  
-**Rationale:**
-- A single global config cannot express KubeVirt VM vs bare-metal differences
-- Per-cluster config duplicates OS configuration and makes updates error-prone
-- Profiles capture what's different about a node *type*, not a specific cluster
-- Multiple clusters can reference the same profile
-
-**Consequence:** ok-cluster references `profile: kubevirt`, not a Talos version or schematic ID.
-
----
-
-### DEC-003: gpu as a first-class profile, not just an extension
-
-**Date:** 2026-06 (GPT architectural review)  
-**Decision:** GPU nodes get their own profile (`profiles/gpu/`) rather than being modeled as an extension on `baremetal/`.  
-**Rationale:**
-- A GPU node has its own kernel args, runtime config, node labels, and taints — it is a distinct node type
-- Extensions add software; profiles define node identity
-- Future GPU types (AMD ROCm, Jetson, Intel GPU) are natural additions alongside `gpu/`, not variants of `baremetal/`
-
-**Consequence:** `profiles/gpu/` is a first-class profile targeting GEX44 + RTX 4000 Ada (ok-gpu).
-
----
-
-### DEC-004: Schematic ID resolution — static now, dynamic later
-
-**Date:** 2026-06  
-**Decision:** The schematic ID is set manually in `cluster-config.yaml` today. Dynamic resolution is planned but deferred.  
-**Rationale:**
-- Dynamic resolution adds complexity and a network dependency at render time
-- Static is safe, reproducible, and sufficient for v0.1.0
-- The `os.schematic_id` field is the seam — today manual, tomorrow automatic
-- `render.py` already supports the priority chain: config → env → fallback
-
-**Consequence:** After `make build PROFILE=kubevirt`, the operator copies the schematic ID into `cluster-config.yaml`. This is a deliberate, explicit step.
-
----
-
-### DEC-005: schematic.yaml lives in profiles/, not image-factory/
-
-**Date:** 2026-06  
-**Decision:** `schematic.yaml` lives inside `profiles/<name>/` rather than a separate `image-factory/` directory.  
-**Rationale:**
-- A profile is the complete description of a node type — `profile.yaml` and `schematic.yaml` belong together
-- A separate `image-factory/` directory mirrors internal implementation rather than the user-facing abstraction
-- `make build PROFILE=kubevirt` makes the relationship explicit
-
-**Consequence:** Each profile directory is self-contained.
-
----
-
-### DEC-006: Extensions come after Phase 2
-
-**Date:** 2026-06 (GPT architectural review)  
-**Decision:** Extension governance is Phase 3 — after profiles and Image Factory are stable.  
-**Rationale:**
-- Profiles and schematics are declarative — maintenance-free once defined
-- Extensions are software — require security update tracking and compatibility testing
-- The `qemu-guest-agent` extension is already active (embedded in the kubevirt schematic) — this is the correct model: extensions live in schematics until Phase 3 formalises the extension directory structure
-
-**Consequence:** Phase 3 begins after `v0.1.0` is proven in production.
-
----
-
-### DEC-007: archive/ instead of _archive/
-
-**Date:** 2026-06  
-**Decision:** Historical files are stored in `archive/`, not `_archive/`.  
-**Rationale:** `_archive/` implies "hidden from tooling". `archive/` communicates intent clearly as a standard English word.  
-**Consequence:** `archive/` is present but not referenced by any Makefile target or documentation.
-
----
-
-### DEC-008: ok-linux is a Distribution Layer, not a Fork
-
-**Date:** 2026-06  
-**Decision:** ok-linux will never fork Talos Linux. Forking is considered a last resort.  
-**Context:** During the transition from the custom kernel approach to Talos-based profiles, a strategic choice was made: diverge from Talos (fork) or extend it (distribution layer). ok-linux is explicitly the latter.  
-**Rationale:**
-- Forking Talos means inheriting its full maintenance burden: kernel patches, security backports, Kubernetes compatibility, and release cadence
-- The Talos upstream already handles everything ok-linux needs at the OS level
-- ok-linux's value is in *selecting* and *configuring* the right Talos image for each environment — not in *modifying* Talos itself
-- Extensions, Image Factory schematics, and MachineConfig presets provide all the customisation needed without diverging from upstream
-- If Talos cannot satisfy a requirement, the correct path is to contribute upstream or propose an extension — not to fork
-
-**Consequence:** ok-linux profiles will always reference official Talos images from `factory.talos.dev`. Any customisation goes through the official Extension catalog. If a future requirement cannot be met this way, it triggers a new decision — not a silent fork.
+| ADR | Decision | Status |
+|---|---|---|
+| [ADR-001](adr/ADR-001-talos-as-base-os.md) | Talos Linux as the base OS — not a custom kernel | Accepted |
+| [ADR-002](adr/ADR-002-profiles-as-abstraction.md) | Profiles as the primary abstraction | Accepted |
+| [ADR-003](adr/ADR-003-gpu-first-class-profile.md) | GPU as a first-class profile, not an extension on baremetal | Accepted |
+| [ADR-004](adr/ADR-004-schematic-id-static-then-dynamic.md) | Schematic ID — static now, dynamic later | Accepted |
+| [ADR-005](adr/ADR-005-schematic-in-profiles-not-image-factory.md) | schematic.yaml lives in profiles/, not image-factory/ | Accepted |
+| [ADR-006](adr/ADR-006-extensions-phase-3.md) | Extensions come after Phase 2 | Accepted |
+| [ADR-007](adr/ADR-007-archive-naming.md) | archive/ instead of _archive/ | Accepted |
+| [ADR-008](adr/ADR-008-distribution-layer-not-fork.md) | ok-linux is a Distribution Layer, not a Fork | Accepted |
 
 ---
 
