@@ -1,6 +1,6 @@
 # ok-linux Specification
 
-**Version:** 0.1.0  
+**Version:** 0.1.1  
 **Status:** Living Document  
 **Maintainer:** Kubernauts / OpenKubes  
 **Repository:** [github.com/openkubes/ok-linux](https://github.com/openkubes/ok-linux)  
@@ -11,19 +11,44 @@
 
 ## Table of Contents
 
-1. [Vision & Positioning](#1-vision--positioning)
-2. [Architecture](#2-architecture)
-3. [Profile Specification](#3-profile-specification)
-4. [Image Factory Contract](#4-image-factory-contract)
-5. [Extension Governance](#5-extension-governance)
-6. [Integration Contract with ok-cluster](#6-integration-contract-with-ok-cluster)
-7. [Versioning Policy](#7-versioning-policy)
-8. [Roadmap](#8-roadmap)
-9. [Decision Log](#9-decision-log)
+1. [Principles](#1-principles)
+2. [Vision & Positioning](#2-vision--positioning)
+3. [Architecture](#3-architecture)
+4. [Profile Specification](#4-profile-specification)
+5. [Image Factory Contract](#5-image-factory-contract)
+6. [Extension Governance](#6-extension-governance)
+7. [Integration Contract with ok-cluster](#7-integration-contract-with-ok-cluster)
+8. [Versioning Policy](#8-versioning-policy)
+9. [Roadmap](#9-roadmap)
+10. [Decision Log](#10-decision-log)
 
 ---
 
-## 1. Vision & Positioning
+## 1. Principles
+
+These principles govern every design decision in ok-linux. When in doubt, return to them.
+
+**1. Upstream first.**
+ok-linux follows Talos Linux upstream whenever possible. Diverging from upstream is considered a last resort. Extensions, Image Factory schematics, and MachineConfig presets are always preferred over upstream forks.
+
+**2. Declarative over imperative.**
+Profiles describe desired state. They never execute installation logic. A profile is a YAML file — not a script.
+
+**3. Minimal opinionation.**
+Only add defaults that benefit every OpenKubes user. Cluster-specific or organisation-specific configuration belongs in ok-cluster or ok-gitops, not in ok-linux profiles.
+
+**4. Reproducible.**
+Every image must be reproducible from Git. `make build PROFILE=<name>` submitted to the same schematic always returns the same schematic ID. No manual steps, no local state.
+
+**5. Immutable.**
+No mutable OS configuration after deployment. Talos is API-driven and immutable by design. ok-linux profiles embrace this — they define the image, not a post-install script.
+
+**6. Source of truth.**
+ok-linux is the single source of truth for all Talos schematic IDs. No component outside ok-linux should hardcode a Talos schematic ID.
+
+---
+
+## 2. Vision & Positioning
 
 ### What is ok-linux?
 
@@ -39,7 +64,7 @@ It provides:
 
 ok-linux is **not** a general-purpose Linux distribution. It does not build a custom kernel, manage package repositories, or define a container runtime. These responsibilities belong to Talos Linux upstream.
 
-ok-linux is a **curation and abstraction layer** on top of Talos Linux.
+ok-linux is a **distribution layer** on top of Talos Linux — not a fork. See [DEC-008](#dec-008-ok-linux-is-a-distribution-layer-not-a-fork).
 
 ### Positioning within OpenKubes
 
@@ -54,23 +79,53 @@ OpenKubes
 └── openkubes     Architecture, documentation, vision
 ```
 
-### Design principle
+### Core design principle
 
-> ok-cluster should never need to know which Talos version or schematic ID is in use.
-> ok-linux is the source of truth.
+> ok-cluster expresses intent. ok-linux is the source of truth.
 
-ok-cluster expresses intent:
+ok-cluster says:
 ```yaml
 os:
   distribution: ok-linux
   profile: kubevirt
 ```
 
-ok-linux provides the implementation details.
+ok-linux provides the implementation: Talos version, schematic ID, kernel args, MachineConfig defaults.
 
 ---
 
-## 2. Architecture
+## 3. Architecture
+
+### Source of truth chain
+
+Every running cluster can be traced back to a single Git commit in ok-linux:
+
+```
+Git (ok-linux)
+      │
+      ▼
+profile.yaml          ← Talos version, schematic_id, kernel_args
+      │
+      ▼
+schematic.yaml        ← Extensions submitted to Image Factory
+      │
+      ▼
+Talos Image Factory   ← factory.talos.dev
+      │
+      ▼
+schematic ID          ← deterministic hash of schematic content
+      │
+      ▼
+ok-cluster            ← cluster-config.yaml os.schematic_id
+      │
+      ▼
+CAPK template         ← KubevirtMachineTemplate with image URL
+      │
+      ▼
+Running cluster       ← Talos nodes booting the verified image
+```
+
+Git is the root of this chain. Every step is reproducible from source.
 
 ### Three-phase evolution
 
@@ -84,32 +139,45 @@ ok-linux is developed in three phases of increasing complexity:
 
 **The key insight:** Profiles and schematics are declarative — they require no ongoing maintenance once defined. Extensions are software — they require security updates, upstream tracking, and compatibility testing. This is why extensions come last.
 
+### Three core artifacts per profile
+
+Each profile consists of three equal artifacts:
+
+```
+profiles/<name>/
+├── profile.yaml        # Identity: Talos version, schematic_id, kernel_args, extensions list
+├── schematic.yaml      # Image: submitted to factory.talos.dev, generates schematic_id
+├── machineconfig.yaml  # Defaults: kubelet, network, time, security, disk layout
+└── README.md           # Documentation: target environment, constraints, tested configs
+```
+
+These three artifacts are equally important:
+- `profile.yaml` is the **identity** — what this profile is
+- `schematic.yaml` is the **image** — what software runs on it
+- `machineconfig.yaml` is the **defaults** — how it is configured
+
 ### Repository structure
 
 ```
 ok-linux/
-├── profiles/                  # Phase 1 — one directory per target environment
-│   ├── kubevirt/
-│   │   ├── profile.yaml       # Talos version, schematic_id, kernel_args, extensions
-│   │   ├── schematic.yaml     # Talos Image Factory input (Phase 2)
-│   │   ├── machineconfig.yaml # MachineConfig defaults for ok-cluster (Phase 2)
-│   │   └── README.md
-│   ├── baremetal/
-│   ├── edge/
-│   └── gpu/                   # Planned — first-class GPU profile
+├── profiles/
+│   ├── kubevirt/          ✅ stable
+│   ├── baremetal/         🚧 in progress
+│   ├── edge/              📋 draft
+│   └── gpu/               📋 planned (first-class profile)
 │
-├── extensions/                # Phase 3 — curated Talos extensions
-│   ├── README.md              # Governance criteria
+├── extensions/            📋 Phase 3
+│   ├── README.md
 │   ├── nvidia/
 │   └── qemu-guest-agent/
 │
 ├── docs/
-│   ├── spec.md                # This document
-│   ├── architecture.md        # Architecture overview
-│   └── roadmap.md             # Phase roadmap
+│   ├── spec.md            ← this document
+│   ├── architecture.md
+│   └── roadmap.md
 │
-├── archive/                   # Historical — previous custom kernel/image approach
-├── Makefile                   # make build/show/verify/show-all PROFILE=
+├── archive/               historical — previous custom kernel/image approach
+├── Makefile
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 └── README.md
@@ -125,13 +193,15 @@ ok-linux/
 | **ok-apps** | Curated platform applications |
 | **openkubes** | Architecture, documentation, vision |
 
+This table is load-bearing. When a new feature is proposed, the first question is: which repository owns it?
+
 ---
 
-## 3. Profile Specification
+## 4. Profile Specification
 
 ### Purpose
 
-A profile is a declarative, versioned description of a Talos Linux configuration for a specific node type or deployment environment. Profiles are the primary artifact of ok-linux Phase 1.
+A profile is a declarative, versioned description of a Talos Linux configuration for a specific node type or deployment environment.
 
 ### Profile schema
 
@@ -141,7 +211,7 @@ A profile is a declarative, versioned description of a Talos Linux configuration
 talos:
   version: string          # Talos release version, e.g. "v1.9.5"
   schematic_id: string     # SHA256 hex from Talos Image Factory
-  image: string            # Full image URL, e.g. "https://factory.talos.dev/installer/<id>:v1.9.5"
+  image: string            # Full image URL
 
 kernel_args:               # List of kernel boot arguments
   - string
@@ -151,28 +221,42 @@ machine_config:            # MachineConfig defaults
     disk: string           # Install disk path, e.g. "/dev/vda"
     wipe: bool             # Default: false
   network:
-    nameservers:           # List of DNS resolvers
+    nameservers:
       - string
   time:
-    servers:               # List of NTP servers
+    servers:
       - string
 
-extensions:                # List of active Talos extensions (short names)
-  - string                 # e.g. "qemu-guest-agent", "nvidia-container-toolkit"
+extensions:                # Active Talos extensions (informational — source of truth is schematic.yaml)
+  - string
 
-notes: string              # Human-readable notes about the profile
+notes: string              # Human-readable notes
 ```
 
 ### Profile naming convention
 
 Profile names are lowercase, hyphen-separated, and describe the **target environment**, not the hardware:
 
-| Profile | Target environment |
-|---|---|
-| `kubevirt` | Talos VMs under KubeVirt (QEMU/KVM) |
-| `baremetal` | Physical servers (Hetzner AX/EX or compatible) |
-| `edge` | Single-node, IoT, ROS2, air-gapped |
-| `gpu` | GPU-accelerated nodes (first-class profile) |
+| Profile | Target environment | Status |
+|---|---|---|
+| `kubevirt` | Talos VMs under KubeVirt (QEMU/KVM) | ✅ stable |
+| `baremetal` | Physical servers (Hetzner AX/EX or compatible) | 🚧 in progress |
+| `edge` | Single-node, IoT, ROS2, air-gapped | 📋 draft |
+| `gpu` | GPU-accelerated nodes (RTX 4000 Ada, first-class) | 📋 planned |
+
+### Future: profile versioning
+
+As profiles mature, explicit version pinning will allow parallel profile versions:
+
+```yaml
+# Planned — not yet implemented
+os:
+  distribution: ok-linux
+  profile: kubevirt
+  profile_version: v1      # or kubevirt@v1
+```
+
+This enables enterprise users to pin to a stable profile version while newer versions are developed in parallel. Not required for v0.1.0 — introduced when a profile has its first breaking change.
 
 ### Profile stability levels
 
@@ -180,27 +264,18 @@ Profile names are lowercase, hyphen-separated, and describe the **target environ
 |---|---|
 | `stable` | Tested against a running cluster, schematic ID verified |
 | `in progress` | Profile defined, not yet fully tested |
-| `draft` | Placeholder — design intent documented, not deployable |
+| `draft` | Design intent documented, not deployable |
 | `planned` | Not yet created |
-
-### Adding a new profile
-
-1. Create `profiles/<name>/` directory
-2. Add `profile.yaml` following the schema above
-3. Add `schematic.yaml` (see Section 4)
-4. Run `make build PROFILE=<name>` to generate and verify the schematic ID
-5. Add `README.md` documenting target environment, constraints, and tested configurations
-6. Submit a pull request referencing the relevant Jira story
 
 ---
 
-## 4. Image Factory Contract
+## 5. Image Factory Contract
 
 ### Purpose
 
 The Talos Image Factory (`factory.talos.dev`) generates reproducible Talos images from declarative schematics. ok-linux owns all schematics and is the single source of truth for schematic IDs.
 
-No component outside ok-linux should ever hardcode a Talos schematic ID. All schematic IDs must be derived from ok-linux profile definitions.
+No component outside ok-linux should ever hardcode a Talos schematic ID.
 
 ### Schematic schema
 
@@ -212,40 +287,23 @@ customization:
       - siderolabs/<extension-name>   # zero or more entries
 ```
 
-The schematic file must not contain comments when submitted to the Image Factory API (comments are stripped automatically by `make build`).
-
 ### Makefile interface
 
 ```bash
-# Show profile summary (version, schematic ID, extensions, kernel args)
-make show PROFILE=<name>
-
-# Submit schematic to factory.talos.dev, write ID back to profile.yaml
-make build PROFILE=<name>
-
-# Verify schematic_id in profile.yaml matches current schematic.yaml
-make verify PROFILE=<name>
-
-# Show summary for all profiles
-make show-all
+make show PROFILE=<name>     # Profile summary: version, schematic ID, extensions, kernel args
+make build PROFILE=<name>    # Submit schematic → get ID → update profile.yaml
+make verify PROFILE=<name>   # Check schematic_id matches current schematic.yaml
+make show-all                # Summary for all profiles
 ```
 
 ### make build behaviour
 
 1. Strips comments from `profiles/<name>/schematic.yaml`
-2. POSTs the cleaned YAML to `https://factory.talos.dev/schematics`
-3. Extracts the returned `id` field
-4. Constructs the image URL: `https://factory.talos.dev/installer/<id>:<talos_version>`
-5. Updates `profile.yaml`: sets `talos.schematic_id` and `talos.image`
-6. Prints the next step for ok-cluster
-
-### Schematic ID stability
-
-The Talos Image Factory returns a deterministic ID for a given schematic content. The same `schematic.yaml` always produces the same ID. Therefore:
-
-- `schematic_id` in `profile.yaml` is a reproducible artifact, not a secret
-- It can be committed to version control
-- It can be verified at any time with `make verify PROFILE=<name>`
+2. POSTs to `https://factory.talos.dev/schematics`
+3. Extracts the returned `id`
+4. Constructs: `https://factory.talos.dev/installer/<id>:<talos_version>`
+5. Updates `profile.yaml`: `talos.schematic_id` and `talos.image`
+6. Prints next step for ok-cluster
 
 ### Verified schematics (v0.1.0)
 
@@ -256,16 +314,11 @@ The Talos Image Factory returns a deterministic ID for a given schematic content
 
 ---
 
-## 5. Extension Governance
+## 6. Extension Governance
 
 ### Purpose
 
-Extensions add software to the Talos image — kernel modules, system daemons, runtime components. Unlike profiles (declarative, maintenance-free), extensions require:
-- Upstream security update tracking
-- Compatibility testing with each Talos minor version
-- Deprecation planning when upstream drops support
-
-This is why Phase 3 (Extensions) comes after Phase 1 and 2 are stable.
+Extensions add software to the Talos image. Unlike profiles (declarative, maintenance-free), extensions require upstream security update tracking, compatibility testing, and deprecation planning.
 
 ### Acceptance criteria
 
@@ -281,9 +334,9 @@ An extension may be added to ok-linux if it meets ALL of the following:
 
 ```
 extensions/<name>/
-├── schematic-addition.yaml   # Talos schematic fragment to add to a profile
+├── schematic-addition.yaml   # Talos schematic fragment
 ├── README.md                 # Purpose, compatibility matrix, tested configurations
-└── CHANGELOG.md              # Per-extension changelog
+└── CHANGELOG.md
 ```
 
 ### Approved extensions (v0.1.0)
@@ -295,14 +348,13 @@ extensions/<name>/
 
 ---
 
-## 6. Integration Contract with ok-cluster
+## 7. Integration Contract with ok-cluster
 
 ### Current state (v0.1.0 — static)
 
 ok-cluster reads the schematic ID from `cluster-config.yaml`:
 
 ```yaml
-# ok-cluster cluster-config.yaml
 os:
   distribution: ok-linux
   profile: kubevirt
@@ -319,25 +371,13 @@ os:
 ),
 ```
 
-The schematic ID is set manually after running `make build PROFILE=<name>` in ok-linux.
-
 ### Future state (dynamic resolution)
 
-In a future release, `render.py` will resolve the schematic ID automatically from ok-linux:
-
-```python
-# Planned — no ok-cluster template changes required
-schematic_id = fetch_from_ok_linux(
-    profile=cfg["os"]["profile"],
-    version=cfg["os"].get("version", "latest")
-)
-```
-
-The `os.schematic_id` field in `cluster-config.yaml` is the **seam** between static and dynamic resolution. The field name and position will not change — only whether it is set manually or automatically.
+In a future release, `render.py` will resolve the schematic ID automatically from ok-linux. The `os.schematic_id` field is the **seam** — today set manually, tomorrow resolved automatically. The field name will not change.
 
 ### Template annotation
 
-The rendered `KubevirtMachineTemplate` carries the schematic ID as an annotation for traceability:
+The rendered `KubevirtMachineTemplate` carries the schematic ID as an audit annotation:
 
 ```yaml
 metadata:
@@ -345,28 +385,17 @@ metadata:
     openkubes.io/talos-schematic: <schematic_id>
 ```
 
-This annotation is the audit trail — it records which ok-linux schematic was used to create a given cluster.
-
 ---
 
-## 7. Versioning Policy
+## 8. Versioning Policy
 
 ok-linux follows [Semantic Versioning](https://semver.org/):
 
 | Increment | Trigger |
 |---|---|
-| **Patch** `v1.0.x` | Talos version bump within a profile, no schema changes |
-| **Minor** `v1.x.0` | New profile added, new extension added |
+| **Patch** `v1.0.x` | Talos version bump, no schema changes |
+| **Minor** `v1.x.0` | New profile or extension added |
 | **Major** `vX.0.0` | Breaking change to profile schema, extension API, or Makefile interface |
-
-### Release process
-
-1. Update `CHANGELOG.md` with release notes
-2. Run `make verify PROFILE=<name>` for all stable profiles
-3. Commit: `git commit -m "chore(release): vX.Y.Z"`
-4. Tag: `git tag -a vX.Y.Z -m "ok-linux vX.Y.Z — <summary>"`
-5. Push tag: `git push origin vX.Y.Z`
-6. Update `schematic_id` in ok-cluster `cluster-config.yaml` if changed
 
 ### Current releases
 
@@ -376,7 +405,7 @@ ok-linux follows [Semantic Versioning](https://semver.org/):
 
 ---
 
-## 8. Roadmap
+## 9. Roadmap
 
 ### Phase 1 — Profiles ✅ (v0.1.0)
 
@@ -393,27 +422,21 @@ ok-linux follows [Semantic Versioning](https://semver.org/):
 
 ### Phase 2 — Continued 📋
 
-- [ ] OK-42 revisit: `machineconfig.yaml` per profile
-- [ ] profiles/gpu: First-class GPU profile (RTX 4000 Ada, GEX44)
+- [ ] `machineconfig.yaml` per profile (Phase 2 revisit)
+- [ ] `profiles/gpu/` — first-class GPU profile (RTX 4000 Ada, GEX44)
 - [ ] Dynamic schematic ID resolution in `render.py`
 
 ### Phase 3 — Extensions 📋
 
-- [ ] OK-48: Extension governance structure and acceptance criteria
-- [x] OK-50: Extension `qemu-guest-agent` — active in kubevirt schematic
-- [ ] OK-49: Extension `nvidia` — GPU support (RTX 4000 Ada)
-
-### Long-term
-
-- Talos FIPS profile (compliance environments)
-- Talos Edge profile (ARM64, air-gapped)
-- ok-linux as input to ok-gitops (automatic OS upgrades via GitOps)
+- [ ] OK-48: Extension governance structure
+- [x] OK-50: `qemu-guest-agent` — active in kubevirt schematic
+- [ ] OK-49: `nvidia` — GPU support (RTX 4000 Ada)
 
 ---
 
-## 9. Decision Log
+## 10. Decision Log
 
-Decisions are recorded here permanently. They explain *why* the system is built the way it is, so future contributors understand the reasoning without having to recover it from git history.
+Decisions are recorded here permanently. They explain *why* the system is built the way it is.
 
 ---
 
@@ -421,12 +444,12 @@ Decisions are recorded here permanently. They explain *why* the system is built 
 
 **Date:** 2026-06  
 **Decision:** ok-linux builds on Talos Linux rather than maintaining a custom kernel.  
-**Context:** The initial ok-linux approach (archived in `archive/`) included a custom kernel config, PXE boot scripts, and a Cloud-Init image pipeline. This was replaced.  
+**Context:** The initial approach (archived in `archive/`) included a custom kernel config, PXE boot scripts, and a Cloud-Init image pipeline.  
 **Rationale:**
-- Talos is immutable, API-driven, and purpose-built for Kubernetes — exactly what ok-linux needs
-- The custom kernel approach required continuous maintenance (patches, security updates, build pipelines)
-- Talos Image Factory provides a reproducible, API-driven way to create images — better than a custom build.sh
-- ok-linux adds value through curation and abstraction, not through reimplementing what Talos already does well
+- Talos is immutable, API-driven, and purpose-built for Kubernetes
+- The custom kernel approach required continuous maintenance
+- Talos Image Factory provides a reproducible, API-driven image pipeline
+- ok-linux adds value through curation and abstraction, not reimplementation
 
 **Consequence:** ok-linux is a Talos distribution, not a Linux distribution.
 
@@ -435,83 +458,92 @@ Decisions are recorded here permanently. They explain *why* the system is built 
 ### DEC-002: Profiles as the primary abstraction
 
 **Date:** 2026-06  
-**Decision:** The primary abstraction in ok-linux is a "profile" — a named, declarative OS configuration for a target environment.  
-**Context:** Alternatives considered: (a) single global config, (b) per-cluster config, (c) profiles.  
+**Decision:** The primary abstraction is a "profile" — a named, declarative OS configuration for a target environment.  
 **Rationale:**
-- A single global config cannot express the difference between a KubeVirt VM (virtio disk, serial console) and a bare-metal server (NVMe, iPXE boot)
-- Per-cluster config duplicates OS configuration across clusters and makes updates error-prone
-- Profiles are the right granularity: they capture what's different about a node *type*, not a specific cluster
-- Profiles are reusable — multiple clusters can reference the same profile
+- A single global config cannot express KubeVirt VM vs bare-metal differences
+- Per-cluster config duplicates OS configuration and makes updates error-prone
+- Profiles capture what's different about a node *type*, not a specific cluster
+- Multiple clusters can reference the same profile
 
-**Consequence:** ok-cluster references `profile: kubevirt`, not a specific Talos version or schematic ID.
+**Consequence:** ok-cluster references `profile: kubevirt`, not a Talos version or schematic ID.
 
 ---
 
 ### DEC-003: gpu as a first-class profile, not just an extension
 
 **Date:** 2026-06 (GPT architectural review)  
-**Decision:** GPU nodes get their own profile (`profiles/gpu/`) rather than being modeled as an extension on top of `baremetal/`.  
-**Context:** Initial idea was: baremetal profile + nvidia extension = GPU node.  
+**Decision:** GPU nodes get their own profile (`profiles/gpu/`) rather than being modeled as an extension on `baremetal/`.  
 **Rationale:**
-- A GPU node is a distinct node type with its own kernel args, runtime config, node labels, and taints
-- Extensions add software (nvidia-container-toolkit); profiles define the complete node identity
-- ok-cluster can express `profile: gpu` cleanly — much clearer than `profile: baremetal + extensions: [nvidia]`
-- Future GPU profiles (Jetson, AMD ROCm) are natural additions alongside `gpu/`, not variants of `baremetal/`
+- A GPU node has its own kernel args, runtime config, node labels, and taints — it is a distinct node type
+- Extensions add software; profiles define node identity
+- Future GPU types (AMD ROCm, Jetson, Intel GPU) are natural additions alongside `gpu/`, not variants of `baremetal/`
 
-**Consequence:** `profiles/gpu/` is planned as a first-class profile targeting the GEX44 + RTX 4000 Ada node (ok-gpu).
+**Consequence:** `profiles/gpu/` is a first-class profile targeting GEX44 + RTX 4000 Ada (ok-gpu).
 
 ---
 
 ### DEC-004: Schematic ID resolution — static now, dynamic later
 
 **Date:** 2026-06  
-**Decision:** The schematic ID is set manually in `cluster-config.yaml` today. Dynamic resolution from ok-linux is planned but deferred.  
-**Context:** The goal is for ok-cluster to reference only `os.profile: kubevirt` without knowing the schematic ID. But ok-cluster's `render.py` needs the ID to render the `KubevirtMachineTemplate`.  
+**Decision:** The schematic ID is set manually in `cluster-config.yaml` today. Dynamic resolution is planned but deferred.  
 **Rationale:**
-- Dynamic resolution requires ok-cluster to fetch from ok-linux at render time — adds complexity and a network dependency
+- Dynamic resolution adds complexity and a network dependency at render time
 - Static is safe, reproducible, and sufficient for v0.1.0
-- The `os.schematic_id` field in `cluster-config.yaml` is the seam — today set manually, tomorrow resolved automatically. The field name will not change.
-- `render.py` already supports the priority chain: `cluster-config → env → fallback`
+- The `os.schematic_id` field is the seam — today manual, tomorrow automatic
+- `render.py` already supports the priority chain: config → env → fallback
 
-**Consequence:** After running `make build PROFILE=kubevirt` in ok-linux, the operator copies the new schematic ID into `cluster-config.yaml`. This is a deliberate, explicit step.
+**Consequence:** After `make build PROFILE=kubevirt`, the operator copies the schematic ID into `cluster-config.yaml`. This is a deliberate, explicit step.
 
 ---
 
 ### DEC-005: schematic.yaml lives in profiles/, not image-factory/
 
 **Date:** 2026-06  
-**Decision:** `schematic.yaml` lives inside `profiles/<name>/` rather than a separate top-level `image-factory/` directory.  
-**Context:** GPT suggested `image-factory/kubevirt/schematic.yaml`. Implemented as `profiles/kubevirt/schematic.yaml`.  
+**Decision:** `schematic.yaml` lives inside `profiles/<name>/` rather than a separate `image-factory/` directory.  
 **Rationale:**
-- A profile is the complete description of a node type — keeping `profile.yaml` and `schematic.yaml` together is cohesive
-- `profile.yaml` references the schematic ID; `schematic.yaml` defines what generates it — they belong together
-- A separate `image-factory/` directory creates a split that mirrors the internal implementation (submit → get ID) rather than the user-facing abstraction (this is the kubevirt profile)
-- `make build PROFILE=kubevirt` makes the relationship explicit without requiring the user to navigate two directories
+- A profile is the complete description of a node type — `profile.yaml` and `schematic.yaml` belong together
+- A separate `image-factory/` directory mirrors internal implementation rather than the user-facing abstraction
+- `make build PROFILE=kubevirt` makes the relationship explicit
 
-**Consequence:** Each profile directory is self-contained. `profiles/kubevirt/` holds everything needed to understand and reproduce the kubevirt OS image.
+**Consequence:** Each profile directory is self-contained.
 
 ---
 
 ### DEC-006: Extensions come after Phase 2
 
-**Date:** 2026-06 (GPT architectural review, adopted)  
-**Decision:** Extension governance and implementation are Phase 3 — after profiles and Image Factory are stable.  
+**Date:** 2026-06 (GPT architectural review)  
+**Decision:** Extension governance is Phase 3 — after profiles and Image Factory are stable.  
 **Rationale:**
-- Profiles and schematics are declarative — they require no ongoing maintenance once defined
-- Extensions are software — they require security update tracking, Talos version compatibility testing, and deprecation planning
-- Starting with extensions would create maintenance obligations before the foundation is stable
-- The qemu-guest-agent extension is already active (embedded in the kubevirt schematic) — this is the correct model: extensions live in schematics, not as separate artifacts, until Phase 3 defines the extension directory structure
+- Profiles and schematics are declarative — maintenance-free once defined
+- Extensions are software — require security update tracking and compatibility testing
+- The `qemu-guest-agent` extension is already active (embedded in the kubevirt schematic) — this is the correct model: extensions live in schematics until Phase 3 formalises the extension directory structure
 
-**Consequence:** Phase 3 begins after `v0.1.0` is proven in production. First extension to formalise: `nvidia` for ok-gpu.
+**Consequence:** Phase 3 begins after `v0.1.0` is proven in production.
 
 ---
 
 ### DEC-007: archive/ instead of _archive/
 
 **Date:** 2026-06  
-**Decision:** The historical custom kernel/image approach is stored in `archive/` (not `_archive/`).  
-**Rationale:** `_archive/` is a convention for "hidden from tooling" (similar to `_build/`, `_site/`). `archive/` is a standard English word that communicates intent clearly without implying the directory should be ignored. Git history preserves the full rename.  
-**Consequence:** `archive/` is present in the repository but not referenced by any Makefile target or documentation.
+**Decision:** Historical files are stored in `archive/`, not `_archive/`.  
+**Rationale:** `_archive/` implies "hidden from tooling". `archive/` communicates intent clearly as a standard English word.  
+**Consequence:** `archive/` is present but not referenced by any Makefile target or documentation.
+
+---
+
+### DEC-008: ok-linux is a Distribution Layer, not a Fork
+
+**Date:** 2026-06  
+**Decision:** ok-linux will never fork Talos Linux. Forking is considered a last resort.  
+**Context:** During the transition from the custom kernel approach to Talos-based profiles, a strategic choice was made: diverge from Talos (fork) or extend it (distribution layer). ok-linux is explicitly the latter.  
+**Rationale:**
+- Forking Talos means inheriting its full maintenance burden: kernel patches, security backports, Kubernetes compatibility, and release cadence
+- The Talos upstream already handles everything ok-linux needs at the OS level
+- ok-linux's value is in *selecting* and *configuring* the right Talos image for each environment — not in *modifying* Talos itself
+- Extensions, Image Factory schematics, and MachineConfig presets provide all the customisation needed without diverging from upstream
+- If Talos cannot satisfy a requirement, the correct path is to contribute upstream or propose an extension — not to fork
+
+**Consequence:** ok-linux profiles will always reference official Talos images from `factory.talos.dev`. Any customisation goes through the official Extension catalog. If a future requirement cannot be met this way, it triggers a new decision — not a silent fork.
 
 ---
 
