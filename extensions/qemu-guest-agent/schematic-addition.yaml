@@ -1,0 +1,5 @@
+# Schematic fragment for qemu-guest-agent
+# Add this entry to profiles/<name>/schematic.yaml under
+# customization.systemExtensions.officialExtensions
+
+- siderolabs/qemu-guest-agent

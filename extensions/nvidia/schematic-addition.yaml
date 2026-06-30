@@ -1,0 +1,10 @@
+# Schematic fragment for NVIDIA GPU support
+# Add these entries to profiles/gpu/schematic.yaml under
+# customization.systemExtensions.officialExtensions
+#
+# Two extensions are required together:
+#   - nvidia-open-gpu-kernel-modules: kernel driver
+#   - nvidia-container-toolkit: container runtime integration (nvidia-ctk, nvidia-container-cli)
+
+- siderolabs/nvidia-open-gpu-kernel-modules
+- siderolabs/nvidia-container-toolkit
