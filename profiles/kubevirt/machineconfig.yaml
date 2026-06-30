@@ -1,0 +1,44 @@
+# ok-linux Profile: kubevirt — MachineConfig Defaults
+#
+# This is one of the three core artifacts of a profile (see docs/spec.md
+# Section 3): profile.yaml (identity), schematic.yaml (image),
+# machineconfig.yaml (defaults — this file).
+#
+# Consumed by: ok-cluster's render.py and new-cluster.sh, which read this
+# file directly from a sibling ok-linux checkout (../ok-linux/profiles/...).
+# See ok-linux ADR-004 for the static-now/dynamic-later resolution model.
+#
+# This file is the single source of truth for these values. Do not
+# duplicate them as hardcoded defaults in ok-cluster or any other consumer.
+
+talos_version: v1.9.5
+
+install:
+  disk: /dev/vda          # virtio block device in KubeVirt VMs
+  wipe: false
+
+network:
+  nameservers:
+    - 8.8.8.8
+    - 1.1.1.1
+
+time:
+  servers:
+    - time.cloudflare.com
+
+kernel_args:
+  - console=ttyS0          # required for QEMU serial console
+  - net.ifnames=0
+
+# Disk/resource sizing defaults for ok-cluster's controlPlane/workers blocks.
+# These are starting points — ok-cluster's cluster-config.yaml can override
+# any of them per cluster.
+defaults:
+  controlPlane:
+    cores: 2
+    memory: 4Gi
+    disk: 20Gi
+  workers:
+    cores: 2
+    memory: 4Gi
+    disk: 15Gi
