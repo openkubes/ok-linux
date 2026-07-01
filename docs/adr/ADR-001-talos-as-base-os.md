@@ -2,8 +2,6 @@
 
 **Date:** 2026-06-13  
 **Status:** Accepted  
-**Deciders:** Arash Kaffamanesh (Kubernauts), architectural review with GPT and Claude  
-**Related:** [OK-37](https://kubernauts.atlassian.net/browse/OK-37), [OK-41](https://kubernauts.atlassian.net/browse/OK-41)
 
 ---
 
