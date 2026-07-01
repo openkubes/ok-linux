@@ -2,8 +2,6 @@
 
 **Date:** YYYY-MM-DD  
 **Status:** Proposed | Accepted | Superseded by ADR-XXX | Deprecated  
-**Deciders:** (names or roles)  
-**Related:** (links to other ADRs, Jira tickets, or GitHub issues)
 
 ---
 

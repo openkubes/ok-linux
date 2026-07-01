@@ -2,8 +2,6 @@
 
 **Date:** 2026-06-29  
 **Status:** Accepted  
-**Deciders:** Arash Kaffamanesh, Claude  
-**Related:** [OK-45](https://kubernauts.atlassian.net/browse/OK-45), [OK-46](https://kubernauts.atlassian.net/browse/OK-46)
 
 ---
 

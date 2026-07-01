@@ -2,8 +2,6 @@
 
 **Date:** 2026-06-29  
 **Status:** Accepted  
-**Deciders:** Arash Kaffamanesh, GPT architectural review  
-**Related:** [OK-37](https://kubernauts.atlassian.net/browse/OK-37), [OK-49](https://kubernauts.atlassian.net/browse/OK-49)
 
 ---
 

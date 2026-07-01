@@ -2,8 +2,6 @@
 
 **Date:** 2026-06-29  
 **Status:** Accepted  
-**Deciders:** Arash Kaffamanesh, GPT and Claude architectural review  
-**Related:** [OK-37](https://kubernauts.atlassian.net/browse/OK-37), ADR-001
 
 ---
 
