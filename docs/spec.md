@@ -1,11 +1,11 @@
 # ok-linux Specification
 
-**Version:** 0.1.1  
+**Version:** 0.1.2  
 **Status:** Living Document  
 **Maintainer:** Kubernauts / OpenKubes  
 **Repository:** [github.com/openkubes/ok-linux](https://github.com/openkubes/ok-linux)  
 **Jira Epic:** [OK-37](https://kubernauts.atlassian.net/browse/OK-37)  
-**Last updated:** 2026-06-29
+**Last updated:** 2026-07-01
 
 ---
 
@@ -350,30 +350,41 @@ extensions/<name>/
 
 ## 7. Integration Contract with ok-cluster
 
-### Current state (v0.1.0 — static)
+### Current state (v0.1.2 — automatic local resolution)
 
-ok-cluster reads the schematic ID from `cluster-config.yaml`:
+ok-cluster's `render.py` reads `profile.yaml` directly from a sibling ok-linux checkout on disk, resolving the Talos version and schematic ID automatically. The resolved values are written into `cluster-config.yaml` for transparency and reproducibility:
 
 ```yaml
 os:
   distribution: ok-linux
   profile: kubevirt
-  schematic_id: ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515
+  schematic_id: ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515  # resolved from ok-linux
 ```
 
-`render.py` resolves `schematic_id` with priority:
+**Expected layout:**
+
+```
+~/workspace/
+├── ok-linux/      ← github.com/openkubes/ok-linux
+└── ok-cluster/    ← github.com/openkubes/ok-cluster
+```
+
+`render.py` resolution priority:
 
 ```python
-"TALOS_SCHEMATIC_ID": (
-    cfg.get("os", {}).get("schematic_id") or   # 1. cluster-config.yaml
-    os.environ.get("TALOS_SCHEMATIC_ID") or     # 2. environment variable
-    "<fallback-id>"                             # 3. hardcoded fallback
-),
+# 1. os.schematic_id already in cluster-config.yaml (e.g. set explicitly)
+# 2. talos.schematic_id from ../ok-linux/profiles/<profile>/profile.yaml  ← primary path today
+# 3. TALOS_SCHEMATIC_ID environment variable
+# 4. FALLBACK_SCHEMATIC_ID hardcoded constant (emits WARNING if reached)
 ```
 
-### Future state (dynamic resolution)
+If `ok-linux` cannot be found at the sibling path, `render.py` prints a `WARNING` and falls back to hardcoded constants. `OK_LINUX_PATH` can override the path if repos are not siblings.
 
-In a future release, `render.py` will resolve the schematic ID automatically from ok-linux. The `os.schematic_id` field is the **seam** — today set manually, tomorrow resolved automatically. The field name will not change.
+This was verified end-to-end on 2026-07-01: two full `make new → make bootstrap` cycles on `ok1-talos` (1 CP + 1 Worker) with schematic ID and Talos version correctly sourced from ok-linux without any manual operator steps.
+
+### Future state (remote resolution)
+
+In a future release, `render.py` will resolve profiles from a Git ref or remote API — without requiring a local ok-linux checkout. The `os.schematic_id` field in `cluster-config.yaml` and the `os:` block structure will not change. This is the remaining step described in [ADR-004](adr/ADR-004-schematic-id-static-then-dynamic.md).
 
 ### Template annotation
 
@@ -420,17 +431,18 @@ ok-linux follows [Semantic Versioning](https://semver.org/):
 - [x] OK-46: ok-cluster reads `schematic_id` from `cluster-config.yaml`
 - [x] OK-47: Versioning, `CHANGELOG.md`, `v0.1.0` tag
 
-### Phase 2 — Continued 📋
+### Phase 2 — Continued ✅
 
-- [ ] `machineconfig.yaml` per profile (Phase 2 revisit)
-- [ ] `profiles/gpu/` — first-class GPU profile (RTX 4000 Ada, GEX44)
-- [ ] Dynamic schematic ID resolution in `render.py`
+- [x] `machineconfig.yaml` per profile — kubevirt profile complete (2026-07-01)
+- [x] ok-cluster reads Talos version + schematic_id from ok-linux automatically (2026-07-01)
+- [ ] `profiles/gpu/` — first-class GPU profile (RTX 4000 Ada, GEX44) — blocked on ok-gpu Talos bare-metal migration
+- [ ] Remote profile resolution in `render.py` (without local ok-linux checkout)
 
-### Phase 3 — Extensions 📋
+### Phase 3 — Extensions 🚧
 
-- [ ] OK-48: Extension governance structure
-- [x] OK-50: `qemu-guest-agent` — active in kubevirt schematic
-- [ ] OK-49: `nvidia` — GPU support (RTX 4000 Ada)
+- [x] OK-48: Extension governance structure — `extensions/README.md`, acceptance criteria
+- [x] OK-50: `qemu-guest-agent` — active in kubevirt schematic, formally documented
+- [ ] OK-49: `nvidia` — GPU support (RTX 4000 Ada) — blocked on `profiles/gpu/`
 
 ---
 
